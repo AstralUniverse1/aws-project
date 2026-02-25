@@ -35,8 +35,7 @@ def index():
 <html>
   <head><meta charset="utf-8"><title>Commit Lab</title></head>
   <body>
-    <h1>Hello Commit Dror Levy</h1>
-    <img src="/logo.png" alt="logo" style="max-height:120px;">
+    <h1>Hello from ECS Fargate</h1>
     <p><b>DB value:</b> {db_value}</p>
     <p><b>Build version:</b> {app_version}</p>
   </body>

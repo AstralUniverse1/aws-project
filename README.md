@@ -11,8 +11,9 @@ Internet → **ALB:443** → **ECS task (nginx:80)** → **app:5000 (same task E
   - **VPC** with DNS hostnames enabled.
   - **Public subnets (2)**: host the **ALB** and the **NAT Gateway** (with an Elastic IP) and have a route table: `0.0.0.0/0 -> Internet Gateway`.
   - **Private subnets (2)**: host **ECS tasks** and **RDS** and have a route table: `0.0.0.0/0 -> NAT Gateway` (outbound only).
+    - Production-grade: NAT could be replaced with VPC Endpoints (ECR, Logs, Secrets) to reduce cost and restrict egress.
   - **NACLs**: restricted on public subnets (inbound 443 + ephemeral return ports; egress open).  
-  - Outcome: only the **ALB** is internet-facing; private workloads can still reach AWS APIs (ECR/Secrets/CloudWatch) via NAT.
+  - Outcome: only the **ALB** is internet-facing; private workloads can still reach AWS APIs (ECR/Secrets/Logs) via NAT.
 
 
 - **Security controls**
@@ -32,6 +33,8 @@ Internet → **ALB:443** → **ECS task (nginx:80)** → **app:5000 (same task E
   - commit SHA (for traceable versions) and
   - `latest` (for default “current release”)
 - Pipeline deploy uses `imagedefinitions.json` to update the ECS service (new task definition revision).
+- Manual trigger by default but can be set to trigger on push to CodeCommit (branch main)
+  - enable: -var="enable_eventbridge_codecommit_trigger=true"
 
 ## HTTPS (what was done here + how to make it “valid”)
 ### Current state (self-signed, works with browser warning)
