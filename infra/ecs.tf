@@ -49,28 +49,51 @@ resource "aws_ecs_task_definition" "nginx" {
   container_definitions = jsonencode([
     {
       name      = "nginx"
-      image     = "923337630273.dkr.ecr.il-central-1.amazonaws.com/project1-nginx:2"
+      image     = "923337630273.dkr.ecr.il-central-1.amazonaws.com/project1-nginx:latest"
       essential = true
+
       portMappings = [
         { containerPort = 80, hostPort = 80, protocol = "tcp" }
       ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs.name
+          awslogs-region        = local.region
+          awslogs-stream-prefix = "project1"
+        }
+      }
+
       dependsOn = [
         { containerName = "app", condition = "START" }
       ]
     },
     {
       name      = "app"
-      image     = "923337630273.dkr.ecr.il-central-1.amazonaws.com/project1-app:3"
+      image     = "923337630273.dkr.ecr.il-central-1.amazonaws.com/project1-app:latest"
       essential = true
+
       portMappings = [
         { containerPort = 5000, hostPort = 5000, protocol = "tcp" }
       ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs.name
+          awslogs-region        = local.region
+          awslogs-stream-prefix = "project1"
+        }
+      }
+
       environment = [
         { name = "MYSQL_HOST",     value = aws_db_instance.mysql.address },
         { name = "MYSQL_PORT",     value = "3306" },
         { name = "MYSQL_DATABASE", value = "appdb" },
         { name = "MYSQL_USER",     value = "appuser" }
       ]
+
       secrets = [
         { name = "MYSQL_PASSWORD", valueFrom = aws_secretsmanager_secret.db_password.arn }
       ]
