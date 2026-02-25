@@ -35,6 +35,7 @@ Internet → **ALB:443** → **ECS task (nginx:80)** → **app:5000 (same task E
 - Pipeline deploy uses `imagedefinitions.json` to update the ECS service (new task definition revision).
 - Manual trigger by default but can be set to trigger on push to CodeCommit (branch main)
   - enable: -var="enable_eventbridge_codecommit_trigger=true"
+- Note: The ECS task definition references :latest for simplicity. In a stricter production setup, deployments would use immutable image tags only (e.g., commit SHA) to avoid drift between Terraform applies and CI/CD releases.
 
 ## HTTPS (what was done here + how to make it “valid”)
 ### Current state (self-signed, works with browser warning)
