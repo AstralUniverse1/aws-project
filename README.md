@@ -1,54 +1,80 @@
-# Project1 – ECS Fargate + ALB (HTTPS) + RDS + CodePipeline (Terraform)
+# AWS ECS Fargate Project
 
-A small web service on **ECS Fargate** (private subnet) exposed via an **Application Load Balancer**.  
-**NGINX** serves the landing page and proxies requests to a **Flask** app that reads a value from **RDS MySQL** and renders it in the HTML.
+Terraform-provisioned AWS deployment of a small web service on ECS Fargate, exposed through an HTTPS Application Load Balancer and backed by RDS MySQL.
 
-**Request path**
-Internet → **ALB:443** → **ECS task (nginx:80)** → **app:5000 (same task ENI)** → **RDS:3306**
+The project also includes AWS-native CI/CD with CodeCommit, CodeBuild, CodePipeline, ECR, and ECS deployment through `imagedefinitions.json`.
 
-## Infrastructure highlights (Terraform)
-- **Networking**
-  - **VPC** with DNS hostnames enabled.
-  - **Public subnets (2)**: host the **ALB** and the **NAT Gateway** (with an Elastic IP) and have a route table: `0.0.0.0/0 -> Internet Gateway`.
-  - **Private subnets (2)**: host **ECS tasks** and **RDS** and have a route table: `0.0.0.0/0 -> NAT Gateway` (outbound only).
-    - Production-grade: NAT could be replaced with VPC Endpoints (ECR, Logs, Secrets) to reduce cost and restrict egress.
-  - **NACLs**: restricted on public subnets (inbound 443 + ephemeral return ports; egress open).  
-  - Outcome: only the **ALB** is internet-facing; private workloads can still reach AWS APIs (ECR/Secrets/Logs) via NAT.
+## Repository Structure
 
+| Path | Purpose |
+| --- | --- |
+| `app/` | Flask application and app Dockerfile |
+| `nginx/` | NGINX reverse proxy config and Dockerfile |
+| `infra/` | Terraform infrastructure for networking, ECS, ALB, RDS, IAM, and CI/CD integration |
+| `buildspec.yml` | CodeBuild steps for building, tagging, pushing, and producing the ECS deploy artifact |
 
-- **Security controls**
-  - SG(ALB): inbound **443** from `0.0.0.0/0`.
-  - SG(ECS): inbound **80** only from SG(ALB).
-  - SG(RDS): inbound **3306** only from SG(ECS).
-  - Secrets: MySQL password stored in **Secrets Manager**; injected into the app container using ECS **execution role** permissions.
+## External Prerequisites
 
-- **Compute**
-  - One ECS service (Fargate) with two containers in one task:
-    - `nginx` → reverse proxy
-    - `app` → Flask + MySQL query
-  - In `awsvpc`, containers share the task ENI, so the correct proxy target is **`127.0.0.1:5000`**.
+| Resource | Expected setup |
+| --- | --- |
+| Terraform backend | S3 bucket and DynamoDB lock table |
+| Source repository | CodeCommit repo |
+| Image repositories | ECR repos for the app and NGINX images |
 
-## CI/CD (CodeCommit → CodeBuild → ECS)
-- CodeBuild builds and pushes images to ECR, tagged with:
-  - commit SHA (for traceable versions) and
-  - `latest` (for default “current release”)
-- Pipeline deploy uses `imagedefinitions.json` to update the ECS service (new task definition revision).
-- Manual trigger by default but can be set to trigger on push to CodeCommit (branch main)
-  - enable: -var="enable_eventbridge_codecommit_trigger=true"
-- Note: The ECS task definition references :latest for simplicity. In a stricter production setup, deployments would use immutable image tags only (e.g., commit SHA) to avoid drift between Terraform applies and CI/CD releases.
+## Application Flow
 
-## HTTPS (what was done here + how to make it “valid”)
-### Current state (self-signed, works with browser warning)
-1) Generate a self-signed cert (key + cert).
-2) Import it into **ACM**.
-3) ALB listener on **443/HTTPS** uses that ACM certificate and forwards to target group on **80/HTTP**.
+```text
+Internet
+→ ALB:443 HTTPS
+→ ECS task: nginx:80
+→ app:5000 on localhost inside the same task ENI
+→ RDS MySQL:3306
+```
 
-### Valid HTTPS (trusted certificate)
-1) Own a domain (example: `project1.yourdomain.com`).
-2) Create DNS zone (Route53 or external).
-3) Request **ACM public certificate** in the ALB region (`il-central-1`) with **DNS validation**.
-4) Add ACM validation CNAME record(s) in DNS; wait for ACM status **Issued**.
-5) Update the ALB HTTPS listener to use the **ACM-issued cert ARN**.
-6) Create DNS record pointing the domain to the ALB (Route53 **Alias A/AAAA** recommended).
-Result: browser shows a trusted lock (no warning).
+NGINX acts as the public-facing container inside the ECS task and reverse-proxies requests to the Flask app on `127.0.0.1:5000`.
 
+The Flask app bootstraps and reads the `app_config` table in RDS, then renders a small HTML response with the database value and build version injected during image build.
+
+## Infrastructure
+
+| Area | Details |
+| --- | --- |
+| Networking | VPC with two public subnets, two private subnets, Internet Gateway, NAT Gateway, and route tables |
+| Load balancing | Public ALB across the public subnets, listening on HTTPS `443` |
+| Compute | ECS Fargate service running one task with `nginx` and `app` containers |
+| Database | Private RDS MySQL instance in a private DB subnet group |
+| Secrets | Random MySQL password stored in Secrets Manager and injected into the app container |
+| Logging | ECS containers use the CloudWatch Logs driver |
+| Artifact storage | S3 bucket for CodePipeline artifacts with versioning, encryption, and public access block |
+
+## Network Access
+
+| Component | Access |
+| --- | --- |
+| ALB | Inbound `443` from the internet |
+| ECS task | Inbound `80` only from the ALB security group |
+| RDS MySQL | Inbound `3306` only from the ECS task security group |
+| Private subnets | No direct Internet Gateway route; outbound traffic uses the NAT Gateway in a public subnet |
+| Public NACL | Allows inbound HTTPS and ephemeral return traffic |
+
+Only the ALB is internet-facing. ECS tasks and RDS have no public access; private subnet outbound traffic is routed through NAT.
+
+## CI/CD Pipeline
+
+| Stage | Service | Details |
+| --- | --- | --- |
+| Source | CodeCommit | Reads from the `main` branch |
+| Build | CodeBuild | Builds the app and NGINX images, tags them, pushes to ECR, and writes `imagedefinitions.json` |
+| Deploy | CodePipeline ECS action | Uses `imagedefinitions.json` to update the ECS service with a new task definition revision |
+
+CodeBuild injects the image tag into the Flask image as `APP_VERSION`, so the deployed page shows the running build version.
+
+Terraform task definitions default to `:latest`; pipeline deployments replace those images through `imagedefinitions.json`.
+
+The pipeline is manual by default. An optional EventBridge trigger can be enabled for CodeCommit pushes.
+
+## HTTPS
+
+Terraform creates a self-signed certificate and imports it into ACM for the ALB HTTPS listener.
+
+This enables HTTPS for the demo, but browsers will show a certificate warning. Trusted HTTPS would require a real domain and an ACM public certificate validated through DNS.
