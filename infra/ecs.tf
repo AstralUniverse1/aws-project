@@ -49,7 +49,7 @@ resource "aws_ecs_task_definition" "nginx" {
   container_definitions = jsonencode([
     {
       name      = "nginx"
-      image     = "923337630273.dkr.ecr.il-central-1.amazonaws.com/project1-nginx:latest"
+      image     = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com/project1-nginx:latest"
       essential = true
 
       portMappings = [
@@ -71,7 +71,7 @@ resource "aws_ecs_task_definition" "nginx" {
     },
     {
       name      = "app"
-      image     = "923337630273.dkr.ecr.il-central-1.amazonaws.com/project1-app:latest"
+      image     = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com/project1-app:latest"
       essential = true
 
       portMappings = [
@@ -100,4 +100,3 @@ resource "aws_ecs_task_definition" "nginx" {
     }
   ])
 }
-

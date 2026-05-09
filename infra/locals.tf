@@ -14,6 +14,4 @@ locals {
 
   ecs_cluster_name = "project1-cluster"
   ecs_service_name = "project1-nginx"
-
-  ecs_task_execution_role_arn = "arn:aws:iam::923337630273:role/project1-ecs-task-exec" # your existing role
 }

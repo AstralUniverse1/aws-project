@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "codepipeline_artifacts" {
-  bucket = "project1-codepipeline-artifacts-923337630273" 
+  bucket = "project1-codepipeline-artifacts-${local.account_id}"
 }
 
 resource "aws_s3_bucket_versioning" "codepipeline_artifacts" {

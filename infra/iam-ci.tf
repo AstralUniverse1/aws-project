@@ -176,7 +176,7 @@ resource "aws_iam_policy" "codepipeline_policy" {
         Action = [
           "iam:PassRole"
         ]
-        Resource = local.ecs_task_execution_role_arn
+        Resource = aws_iam_role.ecs_task_execution.arn
       }
     ]
   })

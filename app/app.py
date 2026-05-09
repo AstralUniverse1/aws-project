@@ -19,6 +19,21 @@ def fetch_db_value():
 
     conn = mysql.connector.connect(**cfg)
     cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS app_config (
+            k VARCHAR(128) PRIMARY KEY,
+            v VARCHAR(255) NOT NULL
+        )
+    """)
+    cur.execute(
+        """
+        INSERT INTO app_config (k, v)
+        VALUES ('deployment_version', %s)
+        ON DUPLICATE KEY UPDATE v = v
+        """,
+        (os.environ.get("APP_VERSION", "unknown"),)
+    )
+    conn.commit()
     cur.execute("SELECT v FROM app_config WHERE k='deployment_version';")
     row = cur.fetchone()
     cur.close()
